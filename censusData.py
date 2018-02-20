@@ -23,15 +23,15 @@ input_placeholder = tf.placeholder(tf.float32, shape=[None, 113])
 # layer 1
 weight1 = tf.get_variable("weight1", shape=[113, 150], initializer=tf.contrib.layers.xavier_initializer())
 bias1 = tf.get_variable("bias1", shape=[150], initializer=tf.contrib.layers.xavier_initializer())
-hidden_layer_1 = tf.nn.relu(tf.matmul(input_placeholder, weight1) + bias1)
+hidden_layer_1 = tf.nn.dropout(tf.nn.relu(tf.matmul(input_placeholder, weight1) + bias1), keep_prob=0.5)
 
 # layer 2
 weight2 = tf.get_variable("weight2", shape=[150, 125], initializer=tf.contrib.layers.xavier_initializer())
 bias2 = tf.get_variable("bias2", shape=[125], initializer=tf.contrib.layers.xavier_initializer())
-hidden_layer_2 = tf.nn.relu(tf.matmul(hidden_layer_1, weight2) + bias2)
+hidden_layer_2 = tf.nn.dropout(tf.nn.relu(tf.matmul(hidden_layer_1, weight2) + bias2), keep_prob=0.5)
 
 # layer 3
-hidden_layer_3 = tf.layers.dense(hidden_layer_2, 100, activation=tf.nn.relu)
+hidden_layer_3 = tf.nn.dropout(tf.layers.dense(hidden_layer_2, 100, activation=tf.nn.relu), keep_prob=0.5)
 
 ## Logit layer
 logits = tf.nn.softmax(tf.layers.dense(hidden_layer_3, 2, activation=None))
@@ -46,10 +46,18 @@ train = tf.train.AdamOptimizer().minimize(loss)
 
 accuracy = dataUtils.accuracy(logits, label_placeholder)
 
+# summaries
+tf.summary.scalar('accuracy', accuracy)
+tf.summary.scalar('loss', loss)
+merged = tf.summary.merge_all()
 
+saver = tf.train.Saver()
 
 ## Make tensorflow session
 with tf.Session() as sess:
+    summary_writer = tf.summary.FileWriter("/tmp/project1",
+                                        sess.graph)
+
     ## Initialize variables
     sess.run(tf.global_variables_initializer())
 
@@ -69,10 +77,11 @@ with tf.Session() as sess:
         if step_count % 10 == 0:
             batch_test_data, batch_test_labels = dataUtils.getBatch(data=test_data, labels=test_labels,
                                                                             batch_size=1000)
-            test_accuracy, test_loss, logits_output =\
-                sess.run([accuracy, loss, logits],
+            test_accuracy, test_loss, summary_merged = sess.run([accuracy, loss, merged],
                          feed_dict={input_placeholder: batch_test_data,
                                     label_placeholder: batch_test_labels})
+
+            summary_writer.add_summary(summary_merged, step_count)
 
             #print("Logits {}".format(logits_output))
             print("Step Count:{}".format(step_count))
@@ -80,6 +89,10 @@ with tf.Session() as sess:
             print("Test accuracy: {} loss: {}".format(test_accuracy, test_loss))
 
 
-        # stop training after 1,000 steps
-        if step_count > 1000:
+        if step_count % 100 == 0:
+            save_path = saver.save(sess, "/tmp/model{}.ckpt".format(step_count))
+
+
+        # stop training after 100 steps
+        if step_count > 100:
             break
