@@ -94,5 +94,5 @@ with tf.Session() as sess:
 
 
         # stop training after 100 steps
-        if step_count > 100:
+        if step_count > 1000:
             break
